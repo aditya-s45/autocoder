@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, maximum-scale=1.0">
+    <meta name="description" content="Turn your Android phone into a USB keyboard for your laptop">
+    <meta name="theme-color" content="#0a0a1a">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <title>Keyboard Punch</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="app-container">
+        <!-- Ambient background glow -->
+        <div class="ambient-glow" id="ambient-glow"></div>
+
+        <!-- Header -->
+        <header class="app-header" id="app-header">
+            <div class="header-left">
+                <div class="logo-icon" id="logo-icon">
+                    <svg width="26" height="26" viewBox="0 0 24 24" fill="none">
+                        <rect x="2" y="4" width="20" height="12" rx="2.5" stroke="currentColor" stroke-width="1.5"/>
+                        <rect x="5" y="7" width="2.5" height="1.8" rx="0.4" fill="currentColor" opacity="0.7"/>
+                        <rect x="9" y="7" width="2.5" height="1.8" rx="0.4" fill="currentColor" opacity="0.7"/>
+                        <rect x="13" y="7" width="2.5" height="1.8" rx="0.4" fill="currentColor" opacity="0.7"/>
+                        <rect x="17" y="7" width="2" height="1.8" rx="0.4" fill="currentColor" opacity="0.5"/>
+                        <rect x="5" y="10.5" width="6" height="1.8" rx="0.4" fill="currentColor" opacity="0.4"/>
+                        <rect x="13" y="10.5" width="6" height="1.8" rx="0.4" fill="currentColor" opacity="0.4"/>
+                        <path d="M10 16 L10 20" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+                        <path d="M14 16 L14 20" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+                        <path d="M7 20 L17 20" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+                    </svg>
+                </div>
+                <h1 class="app-title">Keyboard Punch</h1>
+            </div>
+            <div class="connection-badge" id="connection-badge">
+                <span class="connection-dot" id="connection-dot"></span>
+                <span class="connection-text" id="connection-text">Offline</span>
+            </div>
+        </header>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <!-- Text Input Section -->
+            <section class="input-section" id="input-section">
+                <div class="section-header">
+                    <label for="text-input" class="section-label">Text to Punch</label>
+                    <div class="char-count" id="char-count">0 chars · 0 words</div>
+                </div>
+                <div class="textarea-wrapper" id="textarea-wrapper">
+                    <textarea 
+                        id="text-input" 
+                        class="text-input" 
+                        placeholder="Type or paste your text here...&#10;&#10;✓ Multi-line supported&#10;✓ Tabs &amp; special characters&#10;✓ Code snippets"
+                        spellcheck="false"
+                        autocomplete="off"
+                        autocorrect="off"
+                        autocapitalize="off"
+                    ></textarea>
+                    <button class="clear-btn" id="clear-btn" title="Clear text" aria-label="Clear text">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
+                            <line x1="18" y1="6" x2="6" y2="18"></line>
+                            <line x1="6" y1="6" x2="18" y2="18"></line>
+                        </svg>
+                    </button>
+                </div>
+            </section>
+
+            <!-- Speed Control -->
+            <section class="speed-section" id="speed-section">
+                <div class="section-header">
+                    <span class="section-label">Typing Speed</span>
+                    <span class="speed-value" id="speed-value">100 WPM</span>
+                </div>
+                <div class="slider-wrapper">
+                    <input 
+                        type="range" 
+                        id="speed-slider" 
+                        class="speed-slider" 
+                        min="10" 
+                        max="250" 
+                        value="100" 
+                        step="5"
+                    >
+                    <div class="slider-labels">
+                        <span>10 WPM</span>
+                        <span>130</span>
+                        <span>250 WPM</span>
+                    </div>
+                </div>
+                <div class="estimate" id="estimate"></div>
+            </section>
+
+            <!-- Options -->
+            <section class="options-section" id="options-section">
+                <label class="toggle-option" id="newline-option">
+                    <span class="toggle-label">
+                        <span>Preserve newlines &amp; whitespace</span>
+                        <span class="toggle-hint">Enter, Tab, spaces</span>
+                    </span>
+                    <div class="toggle-switch">
+                        <input type="checkbox" id="preserve-formatting" checked>
+                        <span class="toggle-track"></span>
+                    </div>
+                </label>
+                <label class="toggle-option" id="focus-delay-option">
+                    <span class="toggle-label">
+                        <span>3-second focus delay</span>
+                        <span class="toggle-hint">Time to click target app</span>
+                    </span>
+                    <div class="toggle-switch">
+                        <input type="checkbox" id="focus-delay" checked>
+                        <span class="toggle-track"></span>
+                    </div>
+                </label>
+            </section>
+
+            <!-- Progress Bar (hidden by default) -->
+            <section class="progress-section hidden" id="progress-section">
+                <div class="progress-header">
+                    <span class="progress-label" id="progress-label">Punching...</span>
+                    <span class="progress-percent" id="progress-percent">0%</span>
+                </div>
+                <div class="progress-bar-track">
+                    <div class="progress-bar-fill" id="progress-bar-fill"></div>
+                    <div class="progress-bar-glow" id="progress-bar-glow"></div>
+                </div>
+                <div class="progress-details">
+                    <span id="progress-chars">0 / 0 chars</span>
+                    <span id="progress-eta">~0s remaining</span>
+                </div>
+            </section>
+
+            <!-- Action Buttons -->
+            <div class="action-area" id="action-area">
+                <button class="punch-btn" id="punch-btn" disabled>
+                    <span class="punch-btn-content" id="punch-btn-content">
+                        <svg class="punch-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                            <polygon points="5,3 19,12 5,21" fill="currentColor" stroke="none"></polygon>
+                        </svg>
+                        <span>Start Punching</span>
+                    </span>
+                    <span class="punch-btn-loading hidden" id="punch-btn-loading">
+                        <span class="spinner"></span>
+                        <span>Punching...</span>
+                    </span>
+                </button>
+                <button class="stop-btn hidden" id="stop-btn">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                        <rect x="5" y="5" width="14" height="14" rx="2"></rect>
+                    </svg>
+                    <span>Stop</span>
+                </button>
+            </div>
+
+            <!-- History Section -->
+            <section class="history-section" id="history-section">
+                <div class="section-header">
+                    <span class="section-label">Recent History</span>
+                    <button class="clear-history-btn" id="clear-history-btn">Clear All</button>
+                </div>
+                <div class="history-list" id="history-list">
+                    <div class="history-empty" id="history-empty">No history yet</div>
+                </div>
+            </section>
+        </main>
+
+        <!-- Countdown Overlay -->
+        <div class="countdown-overlay hidden" id="countdown-overlay">
+            <div class="countdown-content">
+                <div class="countdown-number" id="countdown-number">3</div>
+                <div class="countdown-text">Switch to your target app now...</div>
+                <button class="countdown-cancel" id="countdown-cancel">Cancel</button>
+            </div>
+        </div>
+
+        <!-- Toast Notification -->
+        <div class="toast hidden" id="toast">
+            <span class="toast-icon" id="toast-icon"></span>
+            <span class="toast-message" id="toast-message"></span>
+        </div>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>
