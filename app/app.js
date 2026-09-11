@@ -1,8 +1,9 @@
 /**
- * Keyboard Punch — Phone-side App Logic
+ * Keyboard Punch — Phone-side & Desktop App Logic
  * 
- * Connects to the laptop companion via WebSocket over ADB reverse.
- * Sends text for keystroke simulation with configurable WPM speed.
+ * Connects to the laptop companion via WebSocket over ADB reverse or local network.
+ * Supports cross-device code synchronization, configurable WPM speed input,
+ * and customizable focus delay countdown.
  */
 
 (function () {
@@ -27,11 +28,16 @@
         textareaWrapper: $('textarea-wrapper'),
         charCount: $('char-count'),
         clearBtn: $('clear-btn'),
-        speedSlider: $('speed-slider'),
-        speedValue: $('speed-value'),
+        speedInput: $('speed-input'),
+        speedTag: $('speed-tag'),
+        speedMinus: $('speed-minus'),
+        speedPlus: $('speed-plus'),
+        speedPresets: $('speed-presets'),
+        delayInput: $('delay-input'),
+        delayMinus: $('delay-minus'),
+        delayPlus: $('delay-plus'),
         estimate: $('estimate'),
         preserveFormatting: $('preserve-formatting'),
-        focusDelay: $('focus-delay'),
         progressSection: $('progress-section'),
         progressLabel: $('progress-label'),
         progressPercent: $('progress-percent'),
@@ -42,6 +48,7 @@
         punchBtn: $('punch-btn'),
         punchBtnContent: $('punch-btn-content'),
         punchBtnLoading: $('punch-btn-loading'),
+        updateBtn: $('update-btn'),
         stopBtn: $('stop-btn'),
         historyList: $('history-list'),
         historyEmpty: $('history-empty'),
@@ -63,7 +70,7 @@
     let toastTimer = null;
     let wakeLock = null;
 
-    // ─── Wake Lock (prevent phone screen from sleeping) ──────
+    // ─── Wake Lock (prevent screen sleep while typing) ───────
 
     async function acquireWakeLock() {
         try {
@@ -74,7 +81,7 @@
                 });
             }
         } catch (e) {
-            // Wake Lock not supported or denied — not critical
+            // Wake Lock not supported or denied
         }
     }
 
@@ -89,13 +96,27 @@
 
     // ─── Utility Functions ───────────────────────────────────
 
+    function getSpeed() {
+        const val = parseInt(elements.speedInput.value, 10);
+        if (isNaN(val) || val < 10) return 10;
+        if (val > 500) return 500;
+        return val;
+    }
+
+    function getDelay() {
+        const val = parseInt(elements.delayInput.value, 10);
+        if (isNaN(val) || val < 0) return 0;
+        if (val > 60) return 60;
+        return val;
+    }
+
     /**
      * Convert WPM to milliseconds delay between characters.
      * Average word = 5 characters, so:
      * delay_ms = 60000 / (WPM * 5) = 12000 / WPM
      */
     function wpmToDelay(wpm) {
-        return Math.round(12000 / wpm);
+        return Math.max(1, Math.round(12000 / wpm));
     }
 
     function countWords(text) {
@@ -109,21 +130,19 @@
         return `~${mins}m ${secs}s`;
     }
 
-    function getSliderFillPercent(value, min, max) {
-        return ((value - min) / (max - min)) * 100;
-    }
-
     // ─── Settings Persistence ────────────────────────────────
 
     function loadSettings() {
         try {
             const saved = JSON.parse(localStorage.getItem(SETTINGS_KEY) || '{}');
-            if (saved.wpm) elements.speedSlider.value = saved.wpm;
-            if (saved.preserveFormatting !== undefined) {
-                elements.preserveFormatting.checked = saved.preserveFormatting;
+            if (saved.wpm) {
+                elements.speedInput.value = saved.wpm;
             }
             if (saved.focusDelay !== undefined) {
-                elements.focusDelay.checked = saved.focusDelay;
+                elements.delayInput.value = saved.focusDelay;
+            }
+            if (saved.preserveFormatting !== undefined) {
+                elements.preserveFormatting.checked = saved.preserveFormatting;
             }
         } catch (e) { /* ignore */ }
     }
@@ -131,9 +150,9 @@
     function saveSettings() {
         try {
             localStorage.setItem(SETTINGS_KEY, JSON.stringify({
-                wpm: parseInt(elements.speedSlider.value),
+                wpm: getSpeed(),
+                focusDelay: getDelay(),
                 preserveFormatting: elements.preserveFormatting.checked,
-                focusDelay: elements.focusDelay.checked,
             }));
         } catch (e) { /* ignore */ }
     }
@@ -157,10 +176,8 @@
     function addToHistory(text) {
         if (!text.trim()) return;
         const history = loadHistory();
-        // Remove duplicate if exists
         const idx = history.findIndex(h => h.text === text);
         if (idx !== -1) history.splice(idx, 1);
-        // Add to front
         history.unshift({
             text: text,
             chars: text.length,
@@ -179,10 +196,9 @@
         }
 
         elements.historyEmpty.classList.add('hidden');
-        // Remove old items
         elements.historyList.querySelectorAll('.history-item').forEach(el => el.remove());
 
-        history.forEach((item, index) => {
+        history.forEach((item) => {
             const el = document.createElement('div');
             el.className = 'history-item';
             el.setAttribute('role', 'button');
@@ -239,7 +255,7 @@
             isConnected = true;
             updateConnectionUI(true);
             clearTimeout(reconnectTimer);
-            showToast('⚡', 'Connected to laptop', 'success');
+            showToast('⚡', 'Connected to laptop companion', 'success');
         };
 
         ws.onclose = () => {
@@ -252,7 +268,7 @@
         };
 
         ws.onerror = () => {
-            // onclose will fire after this
+            // onclose will trigger next
         };
 
         ws.onmessage = (event) => {
@@ -273,7 +289,7 @@
         updatePunchButtonState();
     }
 
-    // ─── Message Handling ────────────────────────────────────
+    // ─── Message Handling & Synchronization ──────────────────
 
     function handleMessage(data) {
         let msg;
@@ -284,22 +300,67 @@
         }
 
         switch (msg.type) {
+            case 'sync_state':
+                if (msg.state) {
+                    // When connecting, sync existing code if current text area is empty
+                    if (msg.state.text && !elements.textInput.value.trim()) {
+                        elements.textInput.value = msg.state.text;
+                        updateCharCount();
+                        updateTextareaState();
+                    }
+                    if (msg.state.wpm) {
+                        elements.speedInput.value = msg.state.wpm;
+                        updateSpeedDisplay();
+                    }
+                    if (msg.state.focus_delay_sec !== undefined) {
+                        elements.delayInput.value = msg.state.focus_delay_sec;
+                    }
+                    if (msg.state.preserve_formatting !== undefined) {
+                        elements.preserveFormatting.checked = msg.state.preserve_formatting;
+                    }
+                }
+                break;
+
+            case 'code_updated':
+                // Received an update from another connected device (Mac or Phone)
+                if (msg.text !== undefined) {
+                    elements.textInput.value = msg.text;
+                    updateCharCount();
+                    updateTextareaState();
+                    flashSyncHighlight();
+                    showToast('🔄', 'Code updated from device', 'success');
+                }
+                if (msg.wpm) {
+                    elements.speedInput.value = msg.wpm;
+                    updateSpeedDisplay();
+                }
+                if (msg.focus_delay_sec !== undefined) {
+                    elements.delayInput.value = msg.focus_delay_sec;
+                }
+                if (msg.preserve_formatting !== undefined) {
+                    elements.preserveFormatting.checked = msg.preserve_formatting;
+                }
+                break;
+
             case 'progress':
                 updateProgress(msg.current, msg.total);
                 break;
+
             case 'complete':
                 completePunching();
                 break;
+
             case 'error':
                 stopPunching(msg.message || 'An error occurred');
                 showToast('✕', msg.message || 'Error', 'error');
                 break;
+
             case 'stopped':
                 stopPunching('Stopped');
-                showToast('■', 'Punching stopped', 'error');
+                showToast('■', 'Typing stopped', 'error');
                 break;
+
             case 'pong':
-                // Heartbeat response
                 break;
         }
     }
@@ -312,28 +373,68 @@
         return false;
     }
 
-    // ─── Punching Logic ──────────────────────────────────────
+    function flashSyncHighlight() {
+        elements.textareaWrapper.classList.remove('synced-highlight');
+        void elements.textareaWrapper.offsetWidth; // Force re-render
+        elements.textareaWrapper.classList.add('synced-highlight');
+        setTimeout(() => {
+            elements.textareaWrapper.classList.remove('synced-highlight');
+        }, 1500);
+    }
+
+    // ─── Code Update / Sync Action ───────────────────────────
+
+    function sendUpdateCode() {
+        const text = elements.textInput.value;
+        const wpm = getSpeed();
+        const delaySec = getDelay();
+        const preserve = elements.preserveFormatting.checked;
+
+        if (!isConnected) {
+            showToast('!', 'Not connected to laptop companion', 'error');
+            return;
+        }
+
+        const sent = sendMessage({
+            type: 'update_code',
+            text: text,
+            wpm: wpm,
+            focus_delay_sec: delaySec,
+            preserve_formatting: preserve
+        });
+
+        if (sent) {
+            elements.updateBtn.classList.add('updated-pulse');
+            setTimeout(() => elements.updateBtn.classList.remove('updated-pulse'), 700);
+            showToast('✓', 'Code synced to all devices', 'success');
+        } else {
+            showToast('✕', 'Failed to sync code', 'error');
+        }
+    }
+
+    // ─── Punching / Typing Logic ─────────────────────────────
 
     function startPunchFlow() {
         const text = elements.textInput.value;
         if (!text.trim()) {
-            showToast('!', 'Enter some text first', 'error');
+            showToast('!', 'Enter or paste some code first', 'error');
             return;
         }
         if (!isConnected) {
-            showToast('!', 'Not connected to laptop', 'error');
+            showToast('!', 'Not connected to laptop companion', 'error');
             return;
         }
 
-        if (elements.focusDelay.checked) {
-            startCountdown(3, () => sendPunchCommand(text));
+        const delaySec = getDelay();
+        if (delaySec > 0) {
+            startCountdown(delaySec, () => sendPunchCommand(text));
         } else {
             sendPunchCommand(text);
         }
     }
 
     function sendPunchCommand(text) {
-        const wpm = parseInt(elements.speedSlider.value);
+        const wpm = getSpeed();
         const delayMs = wpmToDelay(wpm);
 
         const success = sendMessage({
@@ -371,9 +472,8 @@
         hidePunchingUI();
         elements.ambientGlow.classList.remove('punching');
         releaseWakeLock();
-        showToast('✓', 'Punching complete!', 'success');
+        showToast('✓', 'Typing complete!', 'success');
 
-        // Brief success flash on the button
         elements.punchBtn.style.background = 'linear-gradient(135deg, #00cec9, #55efc4)';
         setTimeout(() => {
             elements.punchBtn.style.background = '';
@@ -387,6 +487,7 @@
         elements.punchBtnContent.classList.add('hidden');
         elements.punchBtnLoading.classList.remove('hidden');
         elements.punchBtn.disabled = true;
+        elements.updateBtn.disabled = true;
         elements.stopBtn.classList.remove('hidden');
         elements.textInput.disabled = true;
         elements.textInput.style.opacity = '0.5';
@@ -410,8 +511,7 @@
         elements.progressBarGlow.style.left = `calc(${percent}% - 30px)`;
         elements.progressChars.textContent = `${current} / ${total} chars`;
 
-        // ETA
-        const wpm = parseInt(elements.speedSlider.value);
+        const wpm = getSpeed();
         const delayMs = wpmToDelay(wpm);
         const remaining = total - current;
         const etaSeconds = (remaining * delayMs) / 1000;
@@ -420,7 +520,7 @@
         if (percent >= 100) {
             elements.progressLabel.textContent = 'Complete!';
         } else {
-            elements.progressLabel.textContent = 'Punching...';
+            elements.progressLabel.textContent = 'Typing...';
         }
     }
 
@@ -441,11 +541,11 @@
     function updatePunchButtonState() {
         const hasText = elements.textInput.value.trim().length > 0;
         elements.punchBtn.disabled = !hasText || !isConnected || isPunching;
+        elements.updateBtn.disabled = !isConnected || isPunching;
     }
 
     function updateSpeedDisplay() {
-        const wpm = parseInt(elements.speedSlider.value);
-        const delayMs = wpmToDelay(wpm);
+        const wpm = getSpeed();
 
         let label = '';
         if (wpm <= 30) label = 'Slow';
@@ -454,11 +554,14 @@
         else if (wpm <= 180) label = 'Very Fast';
         else label = 'Blazing';
 
-        elements.speedValue.textContent = `${wpm} WPM · ${label}`;
+        elements.speedTag.textContent = `${wpm} WPM · ${label}`;
 
-        // Update slider fill
-        const percent = getSliderFillPercent(wpm, 10, 250);
-        elements.speedSlider.style.setProperty('--fill-percent', `${percent}%`);
+        // Update active preset button
+        if (elements.speedPresets) {
+            elements.speedPresets.querySelectorAll('.preset-btn').forEach(btn => {
+                btn.classList.toggle('active', parseInt(btn.dataset.speed, 10) === wpm);
+            });
+        }
 
         updateEstimate();
         saveSettings();
@@ -470,7 +573,7 @@
             elements.estimate.textContent = '';
             return;
         }
-        const wpm = parseInt(elements.speedSlider.value);
+        const wpm = getSpeed();
         const delayMs = wpmToDelay(wpm);
         const totalMs = text.length * delayMs;
         const seconds = totalMs / 1000;
@@ -513,7 +616,6 @@
         elements.toastMessage.textContent = message;
         elements.toast.className = `toast ${type}`;
 
-        // Force reflow for re-animation
         void elements.toast.offsetWidth;
         elements.toast.classList.add('show');
 
@@ -540,14 +642,58 @@
             elements.textInput.focus();
         });
 
-        // Speed slider
-        elements.speedSlider.addEventListener('input', updateSpeedDisplay);
+        // Speed Input & Steppers
+        elements.speedInput.addEventListener('input', updateSpeedDisplay);
+        elements.speedInput.addEventListener('change', () => {
+            elements.speedInput.value = getSpeed();
+            updateSpeedDisplay();
+        });
+
+        elements.speedMinus.addEventListener('click', () => {
+            elements.speedInput.value = Math.max(10, getSpeed() - 5);
+            updateSpeedDisplay();
+        });
+
+        elements.speedPlus.addEventListener('click', () => {
+            elements.speedInput.value = Math.min(500, getSpeed() + 5);
+            updateSpeedDisplay();
+        });
+
+        // Speed Presets
+        if (elements.speedPresets) {
+            elements.speedPresets.addEventListener('click', (e) => {
+                const btn = e.target.closest('.preset-btn');
+                if (btn && btn.dataset.speed) {
+                    elements.speedInput.value = btn.dataset.speed;
+                    updateSpeedDisplay();
+                }
+            });
+        }
+
+        // Delay Input & Steppers
+        elements.delayInput.addEventListener('input', saveSettings);
+        elements.delayInput.addEventListener('change', () => {
+            elements.delayInput.value = getDelay();
+            saveSettings();
+        });
+
+        elements.delayMinus.addEventListener('click', () => {
+            elements.delayInput.value = Math.max(0, getDelay() - 1);
+            saveSettings();
+        });
+
+        elements.delayPlus.addEventListener('click', () => {
+            elements.delayInput.value = Math.min(60, getDelay() + 1);
+            saveSettings();
+        });
 
         // Settings toggles
         elements.preserveFormatting.addEventListener('change', saveSettings);
-        elements.focusDelay.addEventListener('change', saveSettings);
 
-        // Punch button
+        // Update button (sync code across devices)
+        elements.updateBtn.addEventListener('click', sendUpdateCode);
+
+        // Punch / Start Typing button
         elements.punchBtn.addEventListener('click', startPunchFlow);
 
         // Stop button
@@ -570,7 +716,7 @@
             }
         });
 
-        // Prevent zoom on double tap (iOS/Android)
+        // Prevent zoom on double tap
         let lastTouchEnd = 0;
         document.addEventListener('touchend', (e) => {
             const now = Date.now();
@@ -592,12 +738,17 @@
         initEventListeners();
         connect();
 
-        // Keyboard shortcut: Ctrl/Cmd+Enter to punch
+        // Keyboard shortcut: Ctrl/Cmd+Enter to punch, Ctrl/Cmd+S to update
         document.addEventListener('keydown', (e) => {
             if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
                 e.preventDefault();
                 if (!elements.punchBtn.disabled) {
                     startPunchFlow();
+                }
+            } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') {
+                e.preventDefault();
+                if (!elements.updateBtn.disabled) {
+                    sendUpdateCode();
                 }
             }
         });

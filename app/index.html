@@ -73,30 +73,59 @@
             <!-- Speed Control -->
             <section class="speed-section" id="speed-section">
                 <div class="section-header">
-                    <span class="section-label">Typing Speed</span>
-                    <span class="speed-value" id="speed-value">100 WPM</span>
+                    <label for="speed-input" class="section-label">Typing Speed</label>
+                    <span class="speed-tag" id="speed-tag">100 WPM · Fast</span>
                 </div>
-                <div class="slider-wrapper">
-                    <input 
-                        type="range" 
-                        id="speed-slider" 
-                        class="speed-slider" 
-                        min="10" 
-                        max="250" 
-                        value="100" 
-                        step="5"
-                    >
-                    <div class="slider-labels">
-                        <span>10 WPM</span>
-                        <span>130</span>
-                        <span>250 WPM</span>
+                <div class="speed-input-container">
+                    <div class="stepper-field">
+                        <button type="button" class="stepper-btn" id="speed-minus" aria-label="Decrease speed">−</button>
+                        <input 
+                            type="number" 
+                            id="speed-input" 
+                            class="numeric-input" 
+                            min="10" 
+                            max="500" 
+                            value="100" 
+                            step="5"
+                            placeholder="100"
+                        >
+                        <button type="button" class="stepper-btn" id="speed-plus" aria-label="Increase speed">+</button>
+                        <span class="unit-badge">WPM</span>
+                    </div>
+                    <div class="speed-presets" id="speed-presets">
+                        <button type="button" class="preset-btn" data-speed="40">40</button>
+                        <button type="button" class="preset-btn" data-speed="80">80</button>
+                        <button type="button" class="preset-btn active" data-speed="100">100</button>
+                        <button type="button" class="preset-btn" data-speed="150">150</button>
+                        <button type="button" class="preset-btn" data-speed="200">200</button>
                     </div>
                 </div>
                 <div class="estimate" id="estimate"></div>
             </section>
 
-            <!-- Options -->
+            <!-- Options & Delay -->
             <section class="options-section" id="options-section">
+                <div class="option-row" id="delay-option-row">
+                    <div class="option-text">
+                        <label for="delay-input" class="option-title">Focus Delay</label>
+                        <span class="option-subtitle">Countdown before typing starts (0 for instant)</span>
+                    </div>
+                    <div class="stepper-field compact">
+                        <button type="button" class="stepper-btn" id="delay-minus" aria-label="Decrease delay">−</button>
+                        <input 
+                            type="number" 
+                            id="delay-input" 
+                            class="numeric-input compact" 
+                            min="0" 
+                            max="60" 
+                            value="3" 
+                            step="1"
+                            placeholder="3"
+                        >
+                        <button type="button" class="stepper-btn" id="delay-plus" aria-label="Increase delay">+</button>
+                        <span class="unit-badge">sec</span>
+                    </div>
+                </div>
                 <label class="toggle-option" id="newline-option">
                     <span class="toggle-label">
                         <span>Preserve newlines &amp; whitespace</span>
@@ -107,22 +136,12 @@
                         <span class="toggle-track"></span>
                     </div>
                 </label>
-                <label class="toggle-option" id="focus-delay-option">
-                    <span class="toggle-label">
-                        <span>3-second focus delay</span>
-                        <span class="toggle-hint">Time to click target app</span>
-                    </span>
-                    <div class="toggle-switch">
-                        <input type="checkbox" id="focus-delay" checked>
-                        <span class="toggle-track"></span>
-                    </div>
-                </label>
             </section>
 
             <!-- Progress Bar (hidden by default) -->
             <section class="progress-section hidden" id="progress-section">
                 <div class="progress-header">
-                    <span class="progress-label" id="progress-label">Punching...</span>
+                    <span class="progress-label" id="progress-label">Typing...</span>
                     <span class="progress-percent" id="progress-percent">0%</span>
                 </div>
                 <div class="progress-bar-track">
@@ -137,17 +156,23 @@
 
             <!-- Action Buttons -->
             <div class="action-area" id="action-area">
-                <button class="punch-btn" id="punch-btn" disabled>
+                <button class="punch-btn" id="punch-btn" disabled title="Start typing on laptop">
                     <span class="punch-btn-content" id="punch-btn-content">
                         <svg class="punch-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
                             <polygon points="5,3 19,12 5,21" fill="currentColor" stroke="none"></polygon>
                         </svg>
-                        <span>Start Punching</span>
+                        <span>Start Typing</span>
                     </span>
                     <span class="punch-btn-loading hidden" id="punch-btn-loading">
                         <span class="spinner"></span>
-                        <span>Punching...</span>
+                        <span>Typing...</span>
                     </span>
+                </button>
+                <button class="update-btn" id="update-btn" title="Sync code to all devices">
+                    <svg class="update-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/>
+                    </svg>
+                    <span>Update</span>
                 </button>
                 <button class="stop-btn hidden" id="stop-btn">
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">

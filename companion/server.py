@@ -247,20 +247,55 @@ async def type_text(text, delay_ms, preserve_formatting, ws_client):
     
     return True
 
-# ─── WebSocket Server ─────────────────────────────────────────
+# ─── WebSocket Server & Multi-Device Sync ─────────────────────
+
+# Track all connected WebSocket clients (mobile phone, laptop browser tabs, etc.)
+connected_clients = set()
+
+# Shared state synchronized across all devices
+shared_state = {
+    'text': '',
+    'wpm': 100,
+    'focus_delay_sec': 3,
+    'preserve_formatting': True
+}
 
 # Track active punching task so we can cancel it
 active_task = None
 should_stop = False
 
+async def broadcast(message_dict, sender=None, exclude_sender=False):
+    """Send a message to all connected clients."""
+    payload = json.dumps(message_dict)
+    disconnected = []
+    for client in list(connected_clients):
+        if exclude_sender and client == sender:
+            continue
+        if ws_is_open(client):
+            try:
+                await client.send(payload)
+            except Exception:
+                disconnected.append(client)
+        else:
+            disconnected.append(client)
+    for client in disconnected:
+        connected_clients.discard(client)
+
 async def handle_client(websocket):
-    """Handle a WebSocket connection from the phone app."""
-    global active_task, should_stop
+    """Handle a WebSocket connection from a phone or laptop app."""
+    global active_task, should_stop, shared_state
     
     client_ip = websocket.remote_address[0] if websocket.remote_address else 'unknown'
-    log('📱', f'Phone connected from {client_ip}', Color.GREEN)
+    connected_clients.add(websocket)
+    log('📱', f'Device connected from {client_ip} (Total connected: {len(connected_clients)})', Color.GREEN)
     
     try:
+        # Send current shared state to newly connected client
+        await websocket.send(json.dumps({
+            'type': 'sync_state',
+            'state': shared_state
+        }))
+
         async for raw_message in websocket:
             try:
                 msg = json.loads(raw_message)
@@ -268,8 +303,30 @@ async def handle_client(websocket):
                 continue
             
             msg_type = msg.get('type', '')
+
+            if msg_type == 'update_code':
+                new_text = msg.get('text', '')
+                shared_state['text'] = new_text
+                if 'wpm' in msg:
+                    shared_state['wpm'] = msg['wpm']
+                if 'focus_delay_sec' in msg:
+                    shared_state['focus_delay_sec'] = msg['focus_delay_sec']
+                if 'preserve_formatting' in msg:
+                    shared_state['preserve_formatting'] = msg['preserve_formatting']
+
+                log('🔄', f'Code updated ({len(new_text)} chars) from {client_ip}. Syncing to {len(connected_clients)} device(s)', Color.CYAN)
+                
+                # Broadcast updated code to all connected clients
+                await broadcast({
+                    'type': 'code_updated',
+                    'text': new_text,
+                    'wpm': shared_state['wpm'],
+                    'focus_delay_sec': shared_state['focus_delay_sec'],
+                    'preserve_formatting': shared_state['preserve_formatting'],
+                    'sender': client_ip
+                })
             
-            if msg_type == 'punch':
+            elif msg_type == 'punch':
                 text = msg.get('text', '')
                 delay_ms = msg.get('delay_ms', 50)
                 preserve = msg.get('preserve_formatting', True)
@@ -278,26 +335,31 @@ async def handle_client(websocket):
                 if not text:
                     await websocket.send(json.dumps({
                         'type': 'error',
-                        'message': 'No text to punch'
+                        'message': 'No text to type'
                     }))
                     continue
                 
-                log('⌨️ ', f'Punching {len(text)} chars at {wpm} WPM ({delay_ms}ms delay)', Color.CYAN)
+                # Save into shared state
+                shared_state['text'] = text
+                shared_state['wpm'] = wpm
+                shared_state['preserve_formatting'] = preserve
+
+                log('⌨️ ', f'Typing {len(text)} chars at {wpm} WPM ({delay_ms}ms delay)', Color.CYAN)
                 
                 should_stop = False
                 
                 async def do_punch():
                     global should_stop
-                    success = False
                     try:
                         total = len(text)
                         for i, char in enumerate(text):
                             if should_stop:
-                                await websocket.send(json.dumps({'type': 'stopped'}))
-                                log('■', 'Punching stopped by user', Color.YELLOW)
+                                await broadcast({'type': 'stopped'})
+                                log('■', 'Typing stopped by user', Color.YELLOW)
                                 return
                             
-                            if not ws_is_open(websocket):
+                            # Check if at least one client is still open
+                            if not any(ws_is_open(c) for c in connected_clients):
                                 return
                             
                             try:
@@ -312,41 +374,35 @@ async def handle_client(websocket):
                                 else:
                                     pyautogui.write(char)
                             except Exception as e:
-                                await websocket.send(json.dumps({
+                                await broadcast({
                                     'type': 'error',
                                     'message': f'Typing error at position {i}: {str(e)}'
-                                }))
+                                })
                                 return
                             
-                            # Progress update every 5 chars
+                            # Progress update every 5 chars or at the end
                             if i % 5 == 0 or i == total - 1:
-                                try:
-                                    await websocket.send(json.dumps({
-                                        'type': 'progress',
-                                        'current': i + 1,
-                                        'total': total
-                                    }))
-                                except Exception:
-                                    return
+                                await broadcast({
+                                    'type': 'progress',
+                                    'current': i + 1,
+                                    'total': total
+                                })
                             
                             if delay_ms > 0 and i < total - 1:
                                 await asyncio.sleep(delay_ms / 1000.0)
                         
                         # Done!
-                        await websocket.send(json.dumps({'type': 'complete'}))
-                        log('✅', 'Punching complete!', Color.GREEN)
+                        await broadcast({'type': 'complete'})
+                        log('✅', 'Typing complete!', Color.GREEN)
                     
                     except asyncio.CancelledError:
-                        log('■', 'Punching cancelled', Color.YELLOW)
+                        log('■', 'Typing cancelled', Color.YELLOW)
                     except Exception as e:
                         log('❌', f'Error: {str(e)}', Color.RED)
-                        try:
-                            await websocket.send(json.dumps({
-                                'type': 'error',
-                                'message': str(e)
-                            }))
-                        except Exception:
-                            pass
+                        await broadcast({
+                            'type': 'error',
+                            'message': str(e)
+                        })
                 
                 # Cancel any existing punch task
                 if active_task and not active_task.done():
@@ -361,6 +417,7 @@ async def handle_client(websocket):
             elif msg_type == 'stop':
                 should_stop = True
                 log('⏹', 'Stop requested', Color.YELLOW)
+                await broadcast({'type': 'stopped'})
             
             elif msg_type == 'ping':
                 await websocket.send(json.dumps({'type': 'pong'}))
@@ -368,8 +425,10 @@ async def handle_client(websocket):
     except websockets.exceptions.ConnectionClosed:
         pass
     finally:
-        log('📱', 'Phone disconnected', Color.DIM)
-        should_stop = True
+        connected_clients.discard(websocket)
+        log('📱', f'Device disconnected ({client_ip}). Remaining: {len(connected_clients)}', Color.DIM)
+        if not connected_clients:
+            should_stop = True
 
 async def start_ws_server():
     """Start the WebSocket server."""
@@ -459,17 +518,13 @@ async def main():
     log('🔍', 'Checking ADB connection...', Color.CYAN)
     ok, info = check_adb()
     if not ok:
-        log('❌', info, Color.RED)
-        print()
-        log('💡', 'Connect your phone and enable USB Debugging, then try again.', Color.YELLOW)
-        sys.exit(1)
-    
-    log('✅', f'Device connected: {info}', Color.GREEN)
-    
-    # Setup ADB reverse
-    if not setup_adb_reverse():
-        log('❌', 'Failed to set up ADB reverse. Try: adb reverse --remove-all', Color.RED)
-        sys.exit(1)
+        log('⚠️ ', info, Color.YELLOW)
+        log('💡', 'No USB phone detected yet. Connect phone with USB Debugging for ADB reverse.', Color.DIM)
+        log('🌐', 'Starting web & WebSocket servers for Mac browser & local network access...', Color.CYAN)
+    else:
+        log('✅', f'Device connected: {info}', Color.GREEN)
+        if not setup_adb_reverse():
+            log('⚠️ ', 'ADB reverse setup failed. Try: adb reverse --remove-all', Color.YELLOW)
     
     # Start HTTP server
     http_server = start_http_server()
