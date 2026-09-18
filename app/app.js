@@ -38,6 +38,7 @@
         delayPlus: $('delay-plus'),
         estimate: $('estimate'),
         preserveFormatting: $('preserve-formatting'),
+        pasteMode: $('paste-mode'),
         progressSection: $('progress-section'),
         progressLabel: $('progress-label'),
         progressPercent: $('progress-percent'),
@@ -144,6 +145,9 @@
             if (saved.preserveFormatting !== undefined) {
                 elements.preserveFormatting.checked = saved.preserveFormatting;
             }
+            if (saved.pasteMode !== undefined) {
+                elements.pasteMode.checked = saved.pasteMode;
+            }
         } catch (e) { /* ignore */ }
     }
 
@@ -153,6 +157,7 @@
                 wpm: getSpeed(),
                 focusDelay: getDelay(),
                 preserveFormatting: elements.preserveFormatting.checked,
+                pasteMode: elements.pasteMode.checked,
             }));
         } catch (e) { /* ignore */ }
     }
@@ -318,6 +323,9 @@
                     if (msg.state.preserve_formatting !== undefined) {
                         elements.preserveFormatting.checked = msg.state.preserve_formatting;
                     }
+                    if (msg.state.paste_mode !== undefined) {
+                        elements.pasteMode.checked = msg.state.paste_mode;
+                    }
                 }
                 break;
 
@@ -339,6 +347,9 @@
                 }
                 if (msg.preserve_formatting !== undefined) {
                     elements.preserveFormatting.checked = msg.preserve_formatting;
+                }
+                if (msg.paste_mode !== undefined) {
+                    elements.pasteMode.checked = msg.paste_mode;
                 }
                 break;
 
@@ -389,6 +400,7 @@
         const wpm = getSpeed();
         const delaySec = getDelay();
         const preserve = elements.preserveFormatting.checked;
+        const paste = elements.pasteMode.checked;
 
         if (!isConnected) {
             showToast('!', 'Not connected to laptop companion', 'error');
@@ -400,7 +412,8 @@
             text: text,
             wpm: wpm,
             focus_delay_sec: delaySec,
-            preserve_formatting: preserve
+            preserve_formatting: preserve,
+            paste_mode: paste
         });
 
         if (sent) {
@@ -442,6 +455,7 @@
             text: text,
             delay_ms: delayMs,
             preserve_formatting: elements.preserveFormatting.checked,
+            paste_mode: elements.pasteMode.checked,
             wpm: wpm,
         });
 
@@ -573,6 +587,10 @@
             elements.estimate.textContent = '';
             return;
         }
+        if (elements.pasteMode && elements.pasteMode.checked) {
+            elements.estimate.textContent = 'Estimated time: Instant (Clipboard)';
+            return;
+        }
         const wpm = getSpeed();
         const delayMs = wpmToDelay(wpm);
         const totalMs = text.length * delayMs;
@@ -689,6 +707,12 @@
 
         // Settings toggles
         elements.preserveFormatting.addEventListener('change', saveSettings);
+        if (elements.pasteMode) {
+            elements.pasteMode.addEventListener('change', () => {
+                saveSettings();
+                updateEstimate();
+            });
+        }
 
         // Update button (sync code across devices)
         elements.updateBtn.addEventListener('click', sendUpdateCode);
