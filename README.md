@@ -28,10 +28,10 @@ Type or paste text on your phone, press "Start Punching", and watch it get typed
 
 | Requirement | How to Get It |
 |-------------|---------------|
-| **Python 3.8+** | Usually pre-installed on macOS. Check: `python3 --version` |
-| **ADB** | `brew install android-platform-tools` (macOS) |
+| **Python 3.8+** | Usually pre-installed on macOS/Linux. For Windows, download from python.org. Check: `python3 --version` |
+| **ADB** | **Windows:** Run `winget install Google.PlatformTools` in PowerShell<br>**macOS:** Run `brew install android-platform-tools` in Terminal<br>**Linux (Ubuntu/Debian):** Run `sudo apt install adb` |
 | **USB Debugging** | On your phone: Settings → About Phone → Tap "Build Number" 7 times → Back → Developer Options → Enable "USB Debugging" |
-| **USB-C Cable** | A data-capable USB-C to USB-C cable (not charge-only) |
+| **USB Cable** | A data-capable USB cable (not charge-only) |
 
 ---
 
