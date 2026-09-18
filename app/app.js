@@ -40,7 +40,7 @@
         preserveFormatting: $('preserve-formatting'),
         pasteMode: $('paste-mode'),
         jitterMode: $('jitter-mode'),
-        burstMode: $('burst-mode'),
+        oopsMode: $('oops-mode'),
         progressSection: $('progress-section'),
         progressLabel: $('progress-label'),
         progressPercent: $('progress-percent'),
@@ -153,8 +153,8 @@
             if (saved.jitterMode !== undefined) {
                 elements.jitterMode.checked = saved.jitterMode;
             }
-            if (saved.burstMode !== undefined) {
-                elements.burstMode.checked = saved.burstMode;
+            if (saved.oopsMode !== undefined) {
+                elements.oopsMode.checked = saved.oopsMode;
             }
         } catch (e) { /* ignore */ }
     }
@@ -167,7 +167,7 @@
                 preserveFormatting: elements.preserveFormatting.checked,
                 pasteMode: elements.pasteMode.checked,
                 jitterMode: elements.jitterMode ? elements.jitterMode.checked : false,
-                burstMode: elements.burstMode ? elements.burstMode.checked : false,
+                oopsMode: elements.oopsMode ? elements.oopsMode.checked : false,
             }));
         } catch (e) { /* ignore */ }
     }
@@ -339,8 +339,8 @@
                     if (msg.state.jitter_mode !== undefined && elements.jitterMode) {
                         elements.jitterMode.checked = msg.state.jitter_mode;
                     }
-                    if (msg.state.burst_mode !== undefined && elements.burstMode) {
-                        elements.burstMode.checked = msg.state.burst_mode;
+                    if (msg.state.oops_mode !== undefined && elements.oopsMode) {
+                        elements.oopsMode.checked = msg.state.oops_mode;
                     }
                 }
                 break;
@@ -370,8 +370,8 @@
                 if (msg.jitter_mode !== undefined && elements.jitterMode) {
                     elements.jitterMode.checked = msg.jitter_mode;
                 }
-                if (msg.burst_mode !== undefined && elements.burstMode) {
-                    elements.burstMode.checked = msg.burst_mode;
+                if (msg.oops_mode !== undefined && elements.oopsMode) {
+                    elements.oopsMode.checked = msg.oops_mode;
                 }
                 break;
 
@@ -424,7 +424,7 @@
         const preserve = elements.preserveFormatting.checked;
         const paste = elements.pasteMode.checked;
         const jitter = elements.jitterMode ? elements.jitterMode.checked : false;
-        const burst = elements.burstMode ? elements.burstMode.checked : false;
+        const burst = elements.oopsMode ? elements.oopsMode.checked : false;
 
         if (!isConnected) {
             showToast('!', 'Not connected to laptop companion', 'error');
@@ -439,7 +439,7 @@
             preserve_formatting: preserve,
             paste_mode: paste,
             jitter_mode: jitter,
-            burst_mode: burst
+            oops_mode: burst
         });
 
         if (sent) {
@@ -483,7 +483,7 @@
             preserve_formatting: elements.preserveFormatting.checked,
             paste_mode: elements.pasteMode.checked,
             jitter_mode: elements.jitterMode ? elements.jitterMode.checked : false,
-            burst_mode: elements.burstMode ? elements.burstMode.checked : false,
+            oops_mode: elements.oopsMode ? elements.oopsMode.checked : false,
             wpm: wpm,
         });
 
@@ -624,8 +624,8 @@
         const totalMs = text.length * delayMs;
         const seconds = totalMs / 1000;
         let estText = `Estimated time: ${formatTime(seconds)}`;
-        if ((elements.jitterMode && elements.jitterMode.checked) || (elements.burstMode && elements.burstMode.checked)) {
-            estText += ' (Approx, Jitter/Burst on)';
+        if ((elements.jitterMode && elements.jitterMode.checked) || (elements.oopsMode && elements.oopsMode.checked)) {
+            estText += ' (Approx, Jitter/Oops on)';
         }
         elements.estimate.textContent = estText;
     }
@@ -751,8 +751,8 @@
                 updateEstimate();
             });
         }
-        if (elements.burstMode) {
-            elements.burstMode.addEventListener('change', () => {
+        if (elements.oopsMode) {
+            elements.oopsMode.addEventListener('change', () => {
                 saveSettings();
                 updateEstimate();
             });
