@@ -266,7 +266,8 @@ shared_state = {
     'focus_delay_sec': 3,
     'preserve_formatting': True,
     'paste_mode': False,
-    'jitter_mode': False
+    'jitter_mode': False,
+    'burst_mode': False
 }
 
 # Track active punching task so we can cancel it
@@ -326,6 +327,8 @@ async def handle_client(websocket):
                     shared_state['paste_mode'] = msg['paste_mode']
                 if 'jitter_mode' in msg:
                     shared_state['jitter_mode'] = msg['jitter_mode']
+                if 'burst_mode' in msg:
+                    shared_state['burst_mode'] = msg['burst_mode']
 
                 log('🔄', f'Code updated ({len(new_text)} chars) from {client_ip}. Syncing to {len(connected_clients)} device(s)', Color.CYAN)
                 
@@ -338,6 +341,7 @@ async def handle_client(websocket):
                     'preserve_formatting': shared_state['preserve_formatting'],
                     'paste_mode': shared_state['paste_mode'],
                     'jitter_mode': shared_state['jitter_mode'],
+                    'burst_mode': shared_state['burst_mode'],
                     'sender': client_ip
                 })
             
@@ -347,6 +351,7 @@ async def handle_client(websocket):
                 preserve = msg.get('preserve_formatting', True)
                 paste_mode = msg.get('paste_mode', False)
                 jitter_mode = msg.get('jitter_mode', False)
+                burst_mode = msg.get('burst_mode', False)
                 wpm = msg.get('wpm', 100)
                 
                 if not text:
@@ -362,11 +367,16 @@ async def handle_client(websocket):
                 shared_state['preserve_formatting'] = preserve
                 shared_state['paste_mode'] = paste_mode
                 shared_state['jitter_mode'] = jitter_mode
+                shared_state['burst_mode'] = burst_mode
 
                 if paste_mode:
                     log('📋', f'Pasting {len(text)} chars via clipboard', Color.CYAN)
                 else:
-                    log('⌨️ ', f'Typing {len(text)} chars at {wpm} WPM ({delay_ms}ms delay) {"[JITTER ON]" if jitter_mode else ""}', Color.CYAN)
+                    modes = []
+                    if jitter_mode: modes.append('JITTER')
+                    if burst_mode: modes.append('BURST')
+                    modes_str = f" [{'+'.join(modes)}]" if modes else ""
+                    log('⌨️ ', f'Typing {len(text)} chars at {wpm} WPM ({delay_ms}ms base delay){modes_str}', Color.CYAN)
                 
                 should_stop = False
                 
@@ -401,6 +411,8 @@ async def handle_client(websocket):
                                 })
                                 return
                         else:
+                            current_word_mult = random.uniform(0.7, 1.3)
+                            
                             for i, char in enumerate(text):
                                 if should_stop:
                                     await broadcast({'type': 'stopped'})
@@ -438,14 +450,25 @@ async def handle_client(websocket):
                                     })
                                 
                                 if delay_ms > 0 and i < total - 1:
+                                    char_delay = delay_ms
+                                    
+                                    if burst_mode:
+                                        char_delay *= current_word_mult
+                                        if char in [' ', '\n', '\t', '.', ',', '!', '?']:
+                                            # Add a "thinking" pause between words (1.5x to 3.0x normal delay)
+                                            char_delay += random.uniform(1.5, 3.0) * delay_ms
+                                            # Pick a new typing speed for the next word
+                                            current_word_mult = random.uniform(0.7, 1.3)
+                                            
                                     if jitter_mode:
-                                        # Random variation (Gaussian) around the base delay_ms
+                                        # Random variation (Gaussian) around the char_delay
                                         # Standard deviation is 40% of the delay for human-like fluctuation
-                                        jittered_ms = random.gauss(delay_ms, delay_ms * 0.4)
+                                        jittered_ms = random.gauss(char_delay, char_delay * 0.4)
                                         # Ensure delay doesn't go below 1ms
                                         actual_delay = max(1.0, jittered_ms) / 1000.0
                                     else:
-                                        actual_delay = delay_ms / 1000.0
+                                        actual_delay = max(1.0, char_delay) / 1000.0
+                                        
                                     await asyncio.sleep(actual_delay)
                         
                         # Done!

@@ -40,6 +40,7 @@
         preserveFormatting: $('preserve-formatting'),
         pasteMode: $('paste-mode'),
         jitterMode: $('jitter-mode'),
+        burstMode: $('burst-mode'),
         progressSection: $('progress-section'),
         progressLabel: $('progress-label'),
         progressPercent: $('progress-percent'),
@@ -152,6 +153,9 @@
             if (saved.jitterMode !== undefined) {
                 elements.jitterMode.checked = saved.jitterMode;
             }
+            if (saved.burstMode !== undefined) {
+                elements.burstMode.checked = saved.burstMode;
+            }
         } catch (e) { /* ignore */ }
     }
 
@@ -163,6 +167,7 @@
                 preserveFormatting: elements.preserveFormatting.checked,
                 pasteMode: elements.pasteMode.checked,
                 jitterMode: elements.jitterMode ? elements.jitterMode.checked : false,
+                burstMode: elements.burstMode ? elements.burstMode.checked : false,
             }));
         } catch (e) { /* ignore */ }
     }
@@ -334,6 +339,9 @@
                     if (msg.state.jitter_mode !== undefined && elements.jitterMode) {
                         elements.jitterMode.checked = msg.state.jitter_mode;
                     }
+                    if (msg.state.burst_mode !== undefined && elements.burstMode) {
+                        elements.burstMode.checked = msg.state.burst_mode;
+                    }
                 }
                 break;
 
@@ -361,6 +369,9 @@
                 }
                 if (msg.jitter_mode !== undefined && elements.jitterMode) {
                     elements.jitterMode.checked = msg.jitter_mode;
+                }
+                if (msg.burst_mode !== undefined && elements.burstMode) {
+                    elements.burstMode.checked = msg.burst_mode;
                 }
                 break;
 
@@ -413,6 +424,7 @@
         const preserve = elements.preserveFormatting.checked;
         const paste = elements.pasteMode.checked;
         const jitter = elements.jitterMode ? elements.jitterMode.checked : false;
+        const burst = elements.burstMode ? elements.burstMode.checked : false;
 
         if (!isConnected) {
             showToast('!', 'Not connected to laptop companion', 'error');
@@ -426,7 +438,8 @@
             focus_delay_sec: delaySec,
             preserve_formatting: preserve,
             paste_mode: paste,
-            jitter_mode: jitter
+            jitter_mode: jitter,
+            burst_mode: burst
         });
 
         if (sent) {
@@ -470,6 +483,7 @@
             preserve_formatting: elements.preserveFormatting.checked,
             paste_mode: elements.pasteMode.checked,
             jitter_mode: elements.jitterMode ? elements.jitterMode.checked : false,
+            burst_mode: elements.burstMode ? elements.burstMode.checked : false,
             wpm: wpm,
         });
 
@@ -610,8 +624,8 @@
         const totalMs = text.length * delayMs;
         const seconds = totalMs / 1000;
         let estText = `Estimated time: ${formatTime(seconds)}`;
-        if (elements.jitterMode && elements.jitterMode.checked) {
-            estText += ' (Approx, Jitter on)';
+        if ((elements.jitterMode && elements.jitterMode.checked) || (elements.burstMode && elements.burstMode.checked)) {
+            estText += ' (Approx, Jitter/Burst on)';
         }
         elements.estimate.textContent = estText;
     }
@@ -733,6 +747,12 @@
         }
         if (elements.jitterMode) {
             elements.jitterMode.addEventListener('change', () => {
+                saveSettings();
+                updateEstimate();
+            });
+        }
+        if (elements.burstMode) {
+            elements.burstMode.addEventListener('change', () => {
                 saveSettings();
                 updateEstimate();
             });
