@@ -455,8 +455,6 @@ async def handle_client(websocket):
                                     if burst_mode:
                                         char_delay *= current_word_mult
                                         if char in [' ', '\n', '\t', '.', ',', '!', '?']:
-                                            # Add a "thinking" pause between words (1.5x to 3.0x normal delay)
-                                            char_delay += random.uniform(1.5, 3.0) * delay_ms
                                             # Pick a new typing speed for the next word
                                             current_word_mult = random.uniform(0.7, 1.3)
                                             
