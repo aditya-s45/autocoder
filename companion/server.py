@@ -21,6 +21,7 @@ import subprocess
 import sys
 import threading
 import time
+import random
 from http.server import HTTPServer, SimpleHTTPRequestHandler
 from pathlib import Path
 
@@ -264,7 +265,8 @@ shared_state = {
     'wpm': 100,
     'focus_delay_sec': 3,
     'preserve_formatting': True,
-    'paste_mode': False
+    'paste_mode': False,
+    'jitter_mode': False
 }
 
 # Track active punching task so we can cancel it
@@ -322,6 +324,8 @@ async def handle_client(websocket):
                     shared_state['preserve_formatting'] = msg['preserve_formatting']
                 if 'paste_mode' in msg:
                     shared_state['paste_mode'] = msg['paste_mode']
+                if 'jitter_mode' in msg:
+                    shared_state['jitter_mode'] = msg['jitter_mode']
 
                 log('🔄', f'Code updated ({len(new_text)} chars) from {client_ip}. Syncing to {len(connected_clients)} device(s)', Color.CYAN)
                 
@@ -333,6 +337,7 @@ async def handle_client(websocket):
                     'focus_delay_sec': shared_state['focus_delay_sec'],
                     'preserve_formatting': shared_state['preserve_formatting'],
                     'paste_mode': shared_state['paste_mode'],
+                    'jitter_mode': shared_state['jitter_mode'],
                     'sender': client_ip
                 })
             
@@ -341,6 +346,7 @@ async def handle_client(websocket):
                 delay_ms = msg.get('delay_ms', 50)
                 preserve = msg.get('preserve_formatting', True)
                 paste_mode = msg.get('paste_mode', False)
+                jitter_mode = msg.get('jitter_mode', False)
                 wpm = msg.get('wpm', 100)
                 
                 if not text:
@@ -355,11 +361,12 @@ async def handle_client(websocket):
                 shared_state['wpm'] = wpm
                 shared_state['preserve_formatting'] = preserve
                 shared_state['paste_mode'] = paste_mode
+                shared_state['jitter_mode'] = jitter_mode
 
                 if paste_mode:
                     log('📋', f'Pasting {len(text)} chars via clipboard', Color.CYAN)
                 else:
-                    log('⌨️ ', f'Typing {len(text)} chars at {wpm} WPM ({delay_ms}ms delay)', Color.CYAN)
+                    log('⌨️ ', f'Typing {len(text)} chars at {wpm} WPM ({delay_ms}ms delay) {"[JITTER ON]" if jitter_mode else ""}', Color.CYAN)
                 
                 should_stop = False
                 
@@ -431,7 +438,15 @@ async def handle_client(websocket):
                                     })
                                 
                                 if delay_ms > 0 and i < total - 1:
-                                    await asyncio.sleep(delay_ms / 1000.0)
+                                    if jitter_mode:
+                                        # Random variation (Gaussian) around the base delay_ms
+                                        # Standard deviation is 40% of the delay for human-like fluctuation
+                                        jittered_ms = random.gauss(delay_ms, delay_ms * 0.4)
+                                        # Ensure delay doesn't go below 1ms
+                                        actual_delay = max(1.0, jittered_ms) / 1000.0
+                                    else:
+                                        actual_delay = delay_ms / 1000.0
+                                    await asyncio.sleep(actual_delay)
                         
                         # Done!
                         await broadcast({'type': 'complete'})
