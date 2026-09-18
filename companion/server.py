@@ -432,7 +432,7 @@ async def handle_client(websocket):
                                     elif char == '\t' and not preserve:
                                         pyautogui.typewrite('    ', interval=0)
                                     else:
-                                        if oops_mode and char.isalpha() and random.random() < 0.01:
+                                        if oops_mode and char.isalpha() and random.random() < 0.03:
                                             wrong_char = random.choice(string.ascii_lowercase)
                                             if wrong_char == char.lower():
                                                 wrong_char = 'x' if char.lower() != 'x' else 'z'
@@ -443,6 +443,8 @@ async def handle_client(websocket):
                                             await asyncio.sleep(random.uniform(0.1, 0.2))
                                             # Backspace
                                             pyautogui.press('backspace')
+                                            # Log it
+                                            print(f"🙈 Oops! Made a typo on '{char}', fixed it.")
                                             # Tiny pause before resuming
                                             await asyncio.sleep(random.uniform(0.05, 0.15))
                                             
