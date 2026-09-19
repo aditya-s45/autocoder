@@ -61,7 +61,10 @@ import pyperclip
 # ─── Configuration ────────────────────────────────────────────
 WS_PORT = 8765
 HTTP_PORT = 8080
-APP_DIR = Path(__file__).parent.parent / 'app'
+if hasattr(sys, '_MEIPASS'):
+    APP_DIR = Path(sys._MEIPASS) / 'app'
+else:
+    APP_DIR = Path(__file__).parent.parent / 'app'
 
 # pyautogui safety settings
 pyautogui.FAILSAFE = True    # Move mouse to corner to abort
